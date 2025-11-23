@@ -3,31 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Webcam 3-shot → PDF</title>
+  <title>Webcam A4 Scanner → PDF (Auto-crop + DPI)</title>
 
   <style>
-    :root { --accent:#1e88e5; --bg:#0f1720; --card:#0b1220; color-scheme: dark; }
+    :root { --accent:#1e88e5; --bg:#0f1720; color-scheme: dark; }
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
-    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#071025 0%, #021226 100%);color:#e6eef8}
-    .card{width:980px;max-width:95vw;background:rgba(10,14,20,0.55);border-radius:12px;padding:18px;box-shadow:0 8px 30px rgba(0,0,0,0.6);display:grid;grid-template-columns:1fr 320px;gap:18px}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#071025 0%, #021226 100%);color:#e6eef8;padding:18px}
+    .card{width:1100px;max-width:98vw;background:rgba(10,14,20,0.58);border-radius:12px;padding:18px;box-shadow:0 8px 30px rgba(0,0,0,0.6);display:grid;grid-template-columns:1fr 380px;gap:18px}
     .left{display:flex;flex-direction:column;align-items:center;gap:12px}
     .video-wrap{position:relative;background:#000;border-radius:8px;overflow:hidden;width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}
     video{width:100%;height:100%;object-fit:cover;display:block}
-    .overlay{
-      position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-      pointer-events:none;font-weight:700;font-size:72px;color:rgba(255,255,255,0.94);text-shadow:0 4px 18px rgba(0,0,0,0.7)
-    }
-    .controls{display:flex;gap:12px;align-items:center}
-    #startBtn{appearance:none;border:0;background:linear-gradient(180deg,var(--accent),#125ddc);color:white;padding:18px 28px;border-radius:10px;font-size:20px;cursor:pointer;box-shadow:0 6px 20px rgba(30,136,229,0.18)}
+    .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-weight:700;font-size:72px;color:rgba(255,255,255,0.94);text-shadow:0 4px 18px rgba(0,0,0,0.7)}
+    .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    #startBtn{appearance:none;border:0;background:linear-gradient(180deg,var(--accent),#125ddc);color:white;padding:14px 20px;border-radius:10px;font-size:18px;cursor:pointer;box-shadow:0 6px 20px rgba(30,136,229,0.18)}
     #startBtn[disabled]{opacity:0.5;cursor:not-allowed}
+    #filename{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color: #e6eef8}
     .note{font-size:13px;color:#c9d7ee;opacity:0.9}
     .right{display:flex;flex-direction:column;gap:10px}
-    .thumbs{display:grid;grid-template-columns:repeat(1,1fr);gap:8px}
+    .thumbs{display:grid;grid-template-columns:1fr;gap:8px;max-height:540px;overflow:auto}
     .thumb{background:linear-gradient(180deg,#071233,#021226);padding:8px;border-radius:8px;display:flex;gap:8px;align-items:center}
-    .thumb img{width:86px;height:64px;object-fit:cover;border-radius:4px}
-    .thumb .meta{font-size:13px;color:#cfe3ff}
+    .thumb img{width:108px;height:136px;object-fit:cover;border-radius:4px;background:white}
+    .thumb .meta{font-size:13px;color:#cfe3ff;flex:1}
+    .thumb .tools{display:flex;gap:6px;align-items:center}
+    .rotateBtn, .toggleBtn, .reprocessBtn{appearance:none;border:0;background:#1f2937;color:#dbeafe;padding:6px;border-radius:6px;cursor:pointer;font-size:13px}
     .status{font-size:14px;color:#dbeafe}
+    .top-controls{display:flex;gap:8px;align-items:center}
+    .small{font-size:12px;color:#cfe3ff}
+    .badge{font-size:11px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,0.04)}
     @media (max-width:900px){ .card{grid-template-columns:1fr;}}
+    /* tiny spinner */
+    .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,0.12);border-top-color:var(--accent);border-radius:50%;animation:spin 0.85s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
@@ -39,23 +45,41 @@
       </div>
 
       <div class="controls" style="margin-top:8px">
-        <button id="startBtn">Take 3 Photos → PDF</button>
-        <div class="note">Click the button once. Allow camera access. Works best in Chrome/Edge/Firefox on Windows via HTTPS.</div>
+        <div class="top-controls">
+          <input id="filename" type="text" value="scanned-document" aria-label="Filename suggestion" />
+          <label class="small">DPI:
+            <select id="dpiSelect">
+              <option value="150">150 (default)</option>
+              <option value="300">300 (high quality)</option>
+            </select>
+          </label>
+          <label class="small"><input id="autoCrop" type="checkbox" checked /> Auto edge-detect + warp</label>
+          <button id="startBtn">Take 3 A4 Scans → PDF</button>
+        </div>
+        <div class="note">Click once. Allow camera access. Fit the document within the camera preview. If auto-detect fails you can toggle original/processed per thumbnail or reprocess.</div>
       </div>
 
       <div style="margin-top:8px" class="status" id="status">Status: idle</div>
+      <div style="margin-top:8px;font-size:12px;color:#9fb7e6;max-width:900px">
+        Tips: Put the A4 document on a contrasting background, keep the phone/camera fairly steady and parallel to the paper to improve detection.
+      </div>
     </div>
 
     <div class="right">
-      <div style="font-weight:700">Captured photos</div>
-      <div class="thumbs" id="thumbs">
-        <div class="thumb"><div style="width:86px;height:64px;background:#091028;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#6b7f9f">No photos yet</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:700">Captured scans (auto-crop applied)</div>
+        <div class="badge" id="opencvBadge">OpenCV: loading…</div>
       </div>
+      <div class="thumbs" id="thumbs">
+        <div class="thumb"><div style="width:108px;height:136px;background:#091028;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#6b7f9f">No scans yet</div></div>
+      </div>
+
       <div style="margin-top:auto;font-size:12px;color:#9fb7e6">
         Notes:
         <ul style="margin:6px 0 0 18px;padding:0">
-          <li>GitHub Pages serves over HTTPS, so camera permission will work.</li>
-          <li>If IT blocks getUserMedia, nothing in the page can override that — they control browser policies.</li>
+          <li>Auto edge-detection uses OpenCV.js (runs in the browser). If OpenCV isn't loaded the page will fallback to a centered cover-fit A4.</li>
+          <li>Higher DPI (300) improves print quality but uses more memory and may be slower on old machines.</li>
+          <li>Everything stays client-side; nothing is ever uploaded.</li>
         </ul>
       </div>
     </div>
@@ -63,25 +87,62 @@
 
   <!-- jsPDF (UMD build) -->
   <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <!-- OpenCV.js (from OpenCV docs CDN) -->
+  <script async src="https://docs.opencv.org/4.7.0/opencv.js"></script>
 
   <script>
   (function () {
     const startBtn = document.getElementById('startBtn');
+    const filenameInput = document.getElementById('filename');
+    const dpiSelect = document.getElementById('dpiSelect');
+    const autoCropCheckbox = document.getElementById('autoCrop');
     const video = document.getElementById('video');
     const countdownEl = document.getElementById('countdown');
     const statusEl = document.getElementById('status');
     const thumbs = document.getElementById('thumbs');
+    const opencvBadge = document.getElementById('opencvBadge');
 
     let stream = null;
+    // captures: array of { original: dataURL, processed: dataURL|null, useProcessed: bool, processing: bool }
+    let captures = [];
+
+    let cvReady = false;
+    // Wait for OpenCV to initialize
+    function markCVReady(ok) {
+      cvReady = ok;
+      opencvBadge.textContent = ok ? 'OpenCV: ready' : 'OpenCV: not available';
+      if (!ok) opencvBadge.style.background = 'rgba(255,80,80,0.12)';
+      else opencvBadge.style.background = 'rgba(255,255,255,0.02)';
+    }
+
+    // If cv exists and onRuntimeInitialized isn't set yet, listen
+    if (window.cv && window.cv.onRuntimeInitialized) {
+      window.cv['onRuntimeInitialized'] = () => markCVReady(true);
+    } else {
+      // If script not ready, poll until ready (or timeout)
+      let attempts = 0;
+      const iv = setInterval(() => {
+        attempts++;
+        if (window.cv && window.cv['onRuntimeInitialized']) {
+          clearInterval(iv);
+          window.cv['onRuntimeInitialized'] = () => markCVReady(true);
+          // If already initialized
+          if (window.cv && window.cv.Mat) markCVReady(true);
+        } else if (attempts > 60) {
+          clearInterval(iv);
+          markCVReady(false);
+        }
+      }, 300);
+    }
 
     function logStatus(txt) {
       statusEl.textContent = 'Status: ' + txt;
     }
 
-    function sleep(ms) { return new Promise(r=>setTimeout(r, ms)); }
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
     async function openCamera() {
-      const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false };
+      const constraints = { video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: "environment" }, audio: false };
       stream = await navigator.mediaDevices.getUserMedia(constraints);
       video.srcObject = stream;
       await video.play();
@@ -96,7 +157,6 @@
       video.srcObject = null;
     }
 
-    // Short beep using WebAudio (user gesture required; we'll call this during the click sequence)
     function beep(duration = 140, freq = 950, vol = 0.06) {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -110,20 +170,15 @@
         o.start();
         g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration/1000);
         setTimeout(() => { o.stop(); ctx.close(); }, duration + 20);
-      } catch (e) {
-        // audio may be blocked; ignore
-        console.warn('beep audio failed', e);
-      }
+      } catch (e) { console.warn('beep failed', e); }
     }
 
-    // Show overlay countdown (3..2..1) and return when finished
     async function countdown(seconds = 3) {
       countdownEl.style.display = 'flex';
       for (let s = seconds; s >= 1; s--) {
         countdownEl.textContent = s;
         await sleep(1000);
       }
-      // Play a short beep on "0"
       countdownEl.textContent = '●';
       beep(160, 1000, 0.08);
       await sleep(280);
@@ -141,45 +196,315 @@
       return canvas.toDataURL('image/jpeg', 0.95);
     }
 
-    function addThumb(dataUrl, idx) {
-      // clear placeholder if first
-      if (thumbs.children.length === 1 && thumbs.children[0].innerText && thumbs.children[0].innerText.includes('No photos yet')) {
+    function clearThumbsPlaceholderIfNeeded() {
+      if (thumbs.children.length === 1 && thumbs.children[0].innerText && thumbs.children[0].innerText.includes('No scans yet')) {
         thumbs.innerHTML = '';
       }
+    }
 
+    function addThumbEntry(idx) {
+      clearThumbsPlaceholderIfNeeded();
+      const capture = captures[idx];
       const el = document.createElement('div');
       el.className = 'thumb';
+      el.dataset.index = idx;
+
       const img = document.createElement('img');
-      img.src = dataUrl;
-      img.alt = 'Capture ' + idx;
+      img.src = capture.useProcessed && capture.processed ? capture.processed : capture.original;
+      img.alt = 'Scan ' + (idx + 1);
+
       const meta = document.createElement('div');
       meta.className = 'meta';
-      meta.innerHTML = `Photo ${idx}<br/><small>${new Date().toLocaleTimeString()}</small>`;
+      meta.innerHTML = `Scan ${idx + 1}<br/><small>${new Date().toLocaleTimeString()}</small>`;
+
+      const tools = document.createElement('div');
+      tools.className = 'tools';
+
+      const rotateBtn = document.createElement('button');
+      rotateBtn.className = 'rotateBtn';
+      rotateBtn.title = 'Rotate 90°';
+      rotateBtn.innerText = '⤾';
+      rotateBtn.addEventListener('click', async () => {
+        logStatus('Rotating image...');
+        // rotate both original and processed so toggling keeps consistent orientation
+        capture.original = await rotateDataURL90(capture.useProcessed ? img.src : capture.original);
+        if (capture.processed) capture.processed = await rotateDataURL90(capture.processed);
+        // refresh displayed image
+        img.src = capture.useProcessed && capture.processed ? capture.processed : capture.original;
+        logStatus('Rotation done');
+      });
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'toggleBtn';
+      toggleBtn.title = 'Toggle processed/original';
+      toggleBtn.innerText = 'Orig/Proc';
+      toggleBtn.addEventListener('click', () => {
+        capture.useProcessed = !capture.useProcessed;
+        img.src = capture.useProcessed && capture.processed ? capture.processed : capture.original;
+      });
+
+      const reprocessBtn = document.createElement('button');
+      reprocessBtn.className = 'reprocessBtn';
+      reprocessBtn.title = 'Re-run auto-detect and warp';
+      reprocessBtn.innerText = 'Reprocess';
+      reprocessBtn.addEventListener('click', async () => {
+        if (!cvReady) { alert('OpenCV not ready'); return; }
+        reprocessBtn.disabled = true;
+        const spinner = document.createElement('span'); spinner.className = 'spinner'; reprocessBtn.appendChild(spinner);
+        try {
+          const dpi = Number(dpiSelect.value);
+          const fitted = await autoDetectAndWarp(capture.original, dpi);
+          capture.processed = fitted || null;
+          capture.useProcessed = !!fitted;
+          img.src = capture.useProcessed ? capture.processed : capture.original;
+        } catch (e) {
+          console.error(e);
+          alert('Reprocess failed: ' + (e && e.message ? e.message : e));
+        } finally {
+          spinner.remove();
+          reprocessBtn.disabled = false;
+        }
+      });
+
+      // indicator for detection status
+      const statusBadge = document.createElement('div');
+      statusBadge.style.fontSize = '11px';
+      statusBadge.style.opacity = '0.9';
+      statusBadge.style.marginLeft = '6px';
+      statusBadge.textContent = capture.processed ? 'Auto OK' : 'Processed: none';
+
+      tools.appendChild(rotateBtn);
+      tools.appendChild(toggleBtn);
+      tools.appendChild(reprocessBtn);
+      tools.appendChild(statusBadge);
+
       el.appendChild(img);
       el.appendChild(meta);
+      el.appendChild(tools);
       thumbs.appendChild(el);
     }
 
-    async function createPDFFromDataURLs(dataURLs) {
+    async function rotateDataURL90(dataUrl) {
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise(res => img.onload = res);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalHeight;
+      canvas.height = img.naturalWidth;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.translate(canvas.width/2, canvas.height/2);
+      ctx.rotate(90 * Math.PI / 180);
+      ctx.drawImage(img, -img.naturalWidth/2, -img.naturalHeight/2);
+      return canvas.toDataURL('image/jpeg', 0.95);
+    }
+
+    // Fit to A4 (cover) - used as fallback or when processed not available
+    async function fitImageToA4(dataURL, options = {}) {
+      const A4_MM = { w: 210, h: 297 }; // mm
+      const DPI = options.dpi || 150;
+      const pxPerMm = DPI / 25.4;
+      const targetW = Math.round(A4_MM.w * pxPerMm);
+      const targetH = Math.round(A4_MM.h * pxPerMm);
+
+      const img = new Image();
+      img.src = dataURL;
+      await new Promise(res => img.onload = res);
+
+      let sw = img.naturalWidth;
+      let sh = img.naturalHeight;
+
+      let rotate = false;
+      if (sw > sh && targetH > targetW) rotate = true;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!rotate) {
+        const scale = Math.max(targetW / sw, targetH / sh); // cover
+        const drawW = sw * scale;
+        const drawH = sh * scale;
+        const dx = (targetW - drawW) / 2;
+        const dy = (targetH - drawH) / 2;
+        ctx.drawImage(img, dx, dy, drawW, drawH);
+      } else {
+        const tmp = document.createElement('canvas');
+        tmp.width = sh;
+        tmp.height = sw;
+        const tctx = tmp.getContext('2d');
+        tctx.translate(tmp.width/2, tmp.height/2);
+        tctx.rotate(90 * Math.PI / 180);
+        tctx.drawImage(img, -sw/2, -sh/2, sw, sh);
+        const scale = Math.max(targetW / tmp.width, targetH / tmp.height);
+        const drawW = tmp.width * scale;
+        const drawH = tmp.height * scale;
+        const dx = (targetW - drawW) / 2;
+        const dy = (targetH - drawH) / 2;
+        ctx.drawImage(tmp, dx, dy, drawW, drawH);
+      }
+
+      return canvas.toDataURL('image/jpeg', 0.95);
+    }
+
+    // Auto-detect document edges and warp to A4-sized dataURL using OpenCV.
+    // Returns dataURL or null if detection fails (caller may fallback).
+    async function autoDetectAndWarp(dataURL, dpi) {
+      if (!cvReady) throw new Error('OpenCV not ready');
+      const A4_MM = { w: 210, h: 297 }; // mm
+      const pxPerMm = dpi / 25.4;
+      const targetW = Math.round(A4_MM.w * pxPerMm);
+      const targetH = Math.round(A4_MM.h * pxPerMm);
+
+      // load image into canvas
+      const img = new Image();
+      img.src = dataURL;
+      await new Promise(res => img.onload = res);
+
+      const srcCanvas = document.createElement('canvas');
+      srcCanvas.width = img.naturalWidth;
+      srcCanvas.height = img.naturalHeight;
+      const sctx = srcCanvas.getContext('2d');
+      sctx.drawImage(img, 0, 0);
+
+      // read into Mat
+      let src = cv.imread(srcCanvas);
+      try {
+        // convert to gray
+        let gray = new cv.Mat();
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+        // blur
+        let ksize = new cv.Size(5,5);
+        cv.GaussianBlur(gray, gray, ksize, 0, 0, cv.BORDER_DEFAULT);
+        // Canny edges
+        let edges = new cv.Mat();
+        cv.Canny(gray, edges, 50, 150, 3, false);
+
+        // find contours
+        let contours = new cv.MatVector();
+        let hierarchy = new cv.Mat();
+        cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+        // find biggest 4-point contour by area
+        let maxContour = null;
+        let maxArea = 0;
+        for (let i = 0; i < contours.size(); i++) {
+          const cnt = contours.get(i);
+          const area = Math.abs(cv.contourArea(cnt));
+          if (area < 1000) { cnt.delete(); continue; }
+          // approximate polygon
+          let peri = cv.arcLength(cnt, true);
+          let approx = new cv.Mat();
+          cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+          if (approx.rows === 4 && area > maxArea) {
+            maxArea = area;
+            if (maxContour) maxContour.delete();
+            maxContour = approx; // keep approx (4x1x2)
+            // don't delete cnt here as approx uses its own memory; we'll delete cnt anyway
+          } else {
+            approx.delete();
+          }
+          cnt.delete();
+        }
+
+        // cleanup mats we no longer need
+        edges.delete();
+        hierarchy.delete();
+        gray.delete();
+        contours.delete();
+
+        if (!maxContour) {
+          // no good quad found
+          src.delete();
+          return null;
+        }
+
+        // extract 4 points
+        const pts = [];
+        for (let i = 0; i < 4; i++) {
+          pts.push({ x: maxContour.data32S[i*2], y: maxContour.data32S[i*2 + 1] });
+        }
+        maxContour.delete();
+
+        // order points consistently: tl, tr, br, bl
+        function orderPoints(pts) {
+          // sum and diff technique
+          const sums = pts.map(p => p.x + p.y);
+          const diffs = pts.map(p => p.x - p.y);
+          const tl = pts[sums.indexOf(Math.min(...sums))];
+          const br = pts[sums.indexOf(Math.max(...sums))];
+          const tr = pts[diffs.indexOf(Math.min(...diffs))];
+          const bl = pts[diffs.indexOf(Math.max(...diffs))];
+          return [tl, tr, br, bl];
+        }
+        const ordered = orderPoints(pts);
+
+        // create src & dst point mats
+        const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+          ordered[0].x, ordered[0].y,
+          ordered[1].x, ordered[1].y,
+          ordered[2].x, ordered[2].y,
+          ordered[3].x, ordered[3].y
+        ]);
+        const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+          0, 0,
+          targetW - 1, 0,
+          targetW - 1, targetH - 1,
+          0, targetH - 1
+        ]);
+
+        // compute perspective transform and warp
+        const M = cv.getPerspectiveTransform(srcTri, dstTri);
+        let dst = new cv.Mat();
+        const dsize = new cv.Size(targetW, targetH);
+        // warp with white background
+        cv.warpPerspective(src, dst, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255,255,255,255));
+
+        // convert dst to canvas
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = targetW;
+        outCanvas.height = targetH;
+        cv.imshow(outCanvas, dst);
+
+        // free mats
+        srcTri.delete(); dstTri.delete(); M.delete(); dst.delete(); src.delete();
+
+        return outCanvas.toDataURL('image/jpeg', 0.95);
+      } catch (err) {
+        try { src.delete(); } catch (e) {}
+        console.error('autoDetectAndWarp error', err);
+        return null;
+      }
+    }
+
+    async function createPDFFromDataURLs(capturesArray, suggestedFilename) {
       const { jsPDF } = window.jspdf;
       if (!jsPDF) throw new Error('jsPDF not found');
 
-      // Use first image size to set page dims in pixels
-      const img = new Image();
-      img.src = dataURLs[0];
-      await new Promise(res => img.onload = res);
-      const w = img.naturalWidth;
-      const h = img.naturalHeight;
+      const dpi = Number(dpiSelect.value) || 150;
+      const A4_MM = { w: 210, h: 297 };
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+      const A4W = A4_MM.w;
+      const A4H = A4_MM.h;
 
-      const pdf = new jsPDF({ unit: 'px', format: [w, h] });
-
-      for (let i = 0; i < dataURLs.length; i++) {
-        if (i > 0) pdf.addPage([w, h]);
-        pdf.addImage(dataURLs[i], 'JPEG', 0, 0, w, h);
+      for (let i = 0; i < capturesArray.length; i++) {
+        logStatus(`Preparing page ${i+1}...`);
+        const cap = capturesArray[i];
+        // choose image: processed if selected and available else original
+        const srcData = (cap.useProcessed && cap.processed) ? cap.processed : cap.original;
+        // ensure the image is fitted to A4 at chosen DPI; if processed was generated by autoDetectAndWarp it already matches size,
+        // but processed might be smaller if created earlier with different DPI; re-fit to match current DPI for consistent PDF size.
+        const fitted = await fitImageToA4(srcData, { dpi });
+        if (i > 0) pdf.addPage('a4');
+        pdf.addImage(fitted, 'JPEG', 0, 0, A4W, A4H);
       }
 
-      // Trigger browser Save-as dialog. The filename suggestion is provided but user can rename.
-      pdf.save('webcam-photos.pdf');
+      const name = (suggestedFilename && suggestedFilename.trim()) ? suggestedFilename.trim() + '.pdf' : 'scanned-document.pdf';
+      pdf.save(name);
     }
 
     startBtn.addEventListener('click', async function () {
@@ -190,33 +515,71 @@
       } catch (err) {
         console.error(err);
         logStatus('Camera permission denied or no camera available.');
-        alert('Unable to access camera. Make sure you allowed permission and the page is served over HTTPS (GitHub Pages).');
+        alert('Unable to access camera. Make sure you allowed permission and the page is served over HTTPS (GitHub Pages) or localhost.');
         startBtn.disabled = false;
         return;
       }
 
       logStatus('Camera ready. Starting sequence...');
-      const captures = [];
+      captures = [];
+      thumbs.innerHTML = '';
 
       try {
         for (let i = 1; i <= 3; i++) {
           logStatus(`Preparing shot ${i}...`);
-          // 3 second delay with visible countdown and beep at the end
-          await countdown(3);   // shows 3..2..1 then beep then small delay
-          // capture
+          await countdown(3);
           const data = captureFrame();
-          captures.push(data);
-          addThumb(data, i);
-          logStatus(`Captured photo ${i}`);
-          // If not last, wait an extra 500ms so user sees thumbnail update before next countdown (keeps rhythm)
+          // push entry with original; processed will be computed if autoCrop enabled
+          const entry = { original: data, processed: null, useProcessed: false, processing: false };
+          captures.push(entry);
+          // immediately add thumb with placeholder
+          addThumbEntry(captures.length - 1);
+
+          // if autoCrop enabled and OpenCV ready, process now
+          if (autoCropCheckbox.checked && cvReady) {
+            entry.processing = true;
+            // find the thumb element's status badge to update it during processing
+            const thumbEl = thumbs.querySelector(`.thumb[data-index="${captures.length - 1}"]`);
+            const statusBadge = thumbEl && thumbEl.querySelector('.tools div:last-child');
+            if (statusBadge) { statusBadge.textContent = 'Processing…'; thumbEl.querySelector('.tools').appendChild(document.createElement('span')).className='spinner'; }
+            try {
+              const dpi = Number(dpiSelect.value);
+              const processed = await autoDetectAndWarp(entry.original, dpi);
+              entry.processed = processed || null;
+              entry.useProcessed = !!processed;
+              // Update displayed image
+              const imgEl = thumbEl.querySelector('img');
+              imgEl.src = entry.useProcessed && entry.processed ? entry.processed : entry.original;
+              if (statusBadge) statusBadge.textContent = processed ? 'Auto OK' : 'Auto failed';
+            } catch (e) {
+              console.error('auto-process failed', e);
+              if (thumbEl) {
+                const statusBadge2 = thumbEl.querySelector('.tools div:last-child');
+                if (statusBadge2) statusBadge2.textContent = 'Auto error';
+              }
+            } finally {
+              entry.processing = false;
+              // remove spinner if present
+              const sp = thumbEl.querySelector('.spinner');
+              if (sp) sp.remove();
+            }
+          } else {
+            // if autoCrop requested but cv not ready, indicate fallback later
+            const thumbEl = thumbs.querySelector(`.thumb[data-index="${captures.length - 1}"]`);
+            if (thumbEl) {
+              const statusBadge = thumbEl.querySelector('.tools div:last-child');
+              if (statusBadge) statusBadge.textContent = '(no auto-crop)';
+            }
+          }
+
+          logStatus(`Captured scan ${i}`);
           if (i < 3) await sleep(500);
         }
 
-        logStatus('All photos taken. Generating PDF...');
-        // stop camera early to free device/LED
+        logStatus('All scans taken. Generating PDF...');
         stopCamera();
 
-        await createPDFFromDataURLs(captures);
+        await createPDFFromDataURLs(captures, filenameInput.value);
         logStatus('PDF generated. Save dialog should appear.');
       } catch (err) {
         console.error(err);
@@ -224,21 +587,22 @@
         alert('An error occurred: ' + (err && err.message ? err.message : String(err)));
       } finally {
         startBtn.disabled = false;
-        // ensure camera stopped
         stopCamera();
       }
     });
 
-    // Friendly fallback message if getUserMedia unsupported
+    // fallback when no getUserMedia
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       startBtn.disabled = true;
       logStatus('getUserMedia not supported in this browser.');
       const msg = document.createElement('div');
       msg.style.color = '#ffd2d2';
       msg.style.marginTop = '10px';
-      msg.textContent = 'This browser does not support camera access. Use Chrome/Edge/Firefox on desktop.';
+      msg.textContent = 'This browser does not support camera access. Use a modern desktop browser (Chrome/Edge/Firefox).';
       document.querySelector('.left').appendChild(msg);
+      markCVReady(false);
     }
+
   })();
   </script>
 </body>
